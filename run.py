@@ -34,6 +34,11 @@ import os
 import sys
 import time
 
+# the trace contains non-ASCII characters; the Windows console defaults to cp1252
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 

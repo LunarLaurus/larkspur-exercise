@@ -17,8 +17,34 @@ from support import (MODEL, SYSTEM_PROMPT, call_local, execute_tool, mcp_client,
 MAX_TOOL_CALLS = 8  # Larkspur's own build capped the loop here; then a human takes over.
 
 TONE_ADDENDUM = ""                       # ✏️ Build 4, step 4.1, intelligence goal
-EXTRA_TOOLS: List[Dict[str, Any]] = []   # ✏️ Build 2, step 2.1: schemas for the tools you add
-LOCAL_TOOLS: Dict[str, Any] = {}         # ✏️ Build 2, step 2.1: the functions behind them
+EXTRA_TOOLS: List[Dict[str, Any]] = [    # ✏️ Build 2, step 2.1: schemas for the tools you add
+    {
+        "name": "next_available_day",
+        "description": (
+            "Find the earliest date with an open seat on a route, for questions like "
+            "'what is the next day I can fly DEN to AUS?'. Takes airports, not a flight "
+            "number or PNR. Returns that date as YYYY-MM-DD, or null if no flight on the "
+            "route has an open seat. It checks for ONE passenger only, so do not rely on "
+            "it for a group or a multi-passenger booking; escalate those instead. Use "
+            "search_alternatives for the actual options and option_ids."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "origin": {"type": "string", "description": "Origin airport code, e.g. DEN"},
+                "dest": {"type": "string", "description": "Destination airport code, e.g. AUS"},
+                "date": {"type": "string", "description": "Date to search from, YYYY-MM-DD "
+                                                          "(normally the disrupted flight's date)"},
+                "cabin": {"type": "string", "enum": ["Y", "J"],
+                          "description": "Cabin: Y economy (default) or J business"},
+            },
+            "required": ["origin", "dest", "date"],
+        },
+    },
+]
+LOCAL_TOOLS: Dict[str, Any] = {          # ✏️ Build 2, step 2.1: the functions behind them
+    "next_available_day": next_available_day,
+}
 
 
 def text_of(response) -> str:
