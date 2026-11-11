@@ -17,8 +17,39 @@ from support import (MODEL, SYSTEM_PROMPT, call_local, execute_tool, mcp_client,
 MAX_TOOL_CALLS = 8  # Larkspur's own build capped the loop here; then a human takes over.
 
 TONE_ADDENDUM = ""                       # ✏️ Build 4, step 4.1, intelligence goal
-EXTRA_TOOLS: List[Dict[str, Any]] = []   # ✏️ Build 2, step 2.1: schemas for the tools you add
-LOCAL_TOOLS: Dict[str, Any] = {}         # ✏️ Build 2, step 2.1: the functions behind them
+def _what_automation_will_not_do(pnr, request, reason=None):
+    return {
+        "status": "out_of_scope",
+        "pnr": pnr,
+        "request": request,
+        "reason": reason or "Request is outside automation scope",
+        "message": "This request has been marked as out of scope. A human agent will review it.",
+    }
+
+
+EXTRA_TOOLS: List[Dict[str, Any]] = [   # ✏️ Build 2, step 2.1: schemas for the tools you add
+    {
+        "name": "what_automation_will_not_do",
+        "description": (
+            "Mark requests that fall outside automation scope and cannot be handled by this agent. "
+            "Use this for full-trip cancellations, refund-to-payment requests, special accommodations, "
+            "or any other customer ask that the nine given tools do not cover. This documents the "
+            "boundary of what automation can do and ensures these requests are routed correctly to a human."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "pnr": {"type": "string"},
+                "request": {"type": "string", "description": "what the customer is asking for"},
+                "reason": {"type": "string", "description": "why automation cannot handle this"},
+            },
+            "required": ["pnr", "request"],
+        },
+    },
+]
+LOCAL_TOOLS: Dict[str, Any] = {  # ✏️ Build 2, step 2.1: the functions behind them
+    "what_automation_will_not_do": _what_automation_will_not_do,
+}
 
 
 def text_of(response) -> str:
