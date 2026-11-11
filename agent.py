@@ -9,6 +9,8 @@ Where you edit:   grep -n '✏' agent.py   (six marks, one per place)
 Steps and gates:  https://anthropicpartnerbasecamp.bts.com/
 """
 from __future__ import annotations
+import re
+from pathlib import Path
 from typing import Any, Dict, List
 from support import (MODEL, SYSTEM_PROMPT, call_local, execute_tool, mcp_client,
                      new_session, next_available_day, record_tool_result,
@@ -17,8 +19,52 @@ from support import (MODEL, SYSTEM_PROMPT, call_local, execute_tool, mcp_client,
 MAX_TOOL_CALLS = 8  # Larkspur's own build capped the loop here; then a human takes over.
 
 TONE_ADDENDUM = ""                       # ✏️ Build 4, step 4.1, intelligence goal
-EXTRA_TOOLS: List[Dict[str, Any]] = []   # ✏️ Build 2, step 2.1: schemas for the tools you add
-LOCAL_TOOLS: Dict[str, Any] = {}         # ✏️ Build 2, step 2.1: the functions behind them
+EXTRA_TOOLS: List[Dict[str, Any]] = [   # ✏️ Build 2, step 2.1: schemas for the tools you add
+    {
+        "name": "fare_rules",
+        "description": (
+            "Quote Larkspur's Handbook fare rules for one topic: fare families, delay and "
+            "cancellation rules, care while you wait, and what chat automation will not do. "
+            "Call it before you tell a customer what their fare allows or what they are owed "
+            "on a policy question. Pass a section number (4 to 7) or a word from the section's "
+            "title, such as 'care', 'delay' or 'fare'. It returns that section's text, or the "
+            "list of sections if nothing matches."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "section": {"type": "string", "description": "A section number (e.g. '6') or a word from its title (e.g. 'care', 'delay')."},
+            },
+            "required": ["section"],
+        },
+    },
+]
+FARE_RULES_FILE = Path(__file__).parent / "data" / "americas" / "fare_rules_excerpt.md"
+
+
+def fare_rules(section: str) -> Dict[str, Any]:
+    """Return the Handbook section that matches a number or title word."""
+    query = re.sub(r"^section\s+", "", (section or "").strip().lower()).rstrip(".")
+    if not query:
+        return {"error": "section is required"}
+    parts = re.split(r"^### ", FARE_RULES_FILE.read_text(encoding="utf-8"), flags=re.M)[1:]
+    sections = []
+    for part in parts:
+        heading, _, body = part.partition("\n")
+        m = re.match(r"^(\d+)\.\s*(.*)$", heading.strip())
+        number, title = (m.group(1), m.group(2)) if m else ("", heading.strip())
+        sections.append({"number": number, "title": title, "text": "### " + part.strip()})
+    for s in sections:
+        if query == s["number"]:
+            return {"section": s["title"], "text": s["text"]}
+    for s in sections:
+        if query in s["title"].lower():
+            return {"section": s["title"], "text": s["text"]}
+    return {"error": "No section matches %r. Available: %s." % (
+        section, ", ".join("%s (%s)" % (s["number"], s["title"]) for s in sections))}
+
+
+LOCAL_TOOLS: Dict[str, Any] = {"fare_rules": fare_rules}   # ✏️ Build 2, step 2.1: the functions behind them
 
 
 def text_of(response) -> str:
