@@ -9,6 +9,8 @@ Where you edit:   grep -n '✏' agent.py   (six marks, one per place)
 Steps and gates:  https://anthropicpartnerbasecamp.bts.com/
 """
 from __future__ import annotations
+import json
+import os
 from typing import Any, Dict, List
 from support import (MODEL, SYSTEM_PROMPT, call_local, execute_tool, mcp_client,
                      new_session, next_available_day, record_tool_result,
@@ -17,8 +19,62 @@ from support import (MODEL, SYSTEM_PROMPT, call_local, execute_tool, mcp_client,
 MAX_TOOL_CALLS = 8  # Larkspur's own build capped the loop here; then a human takes over.
 
 TONE_ADDENDUM = ""                       # ✏️ Build 4, step 4.1, intelligence goal
-EXTRA_TOOLS: List[Dict[str, Any]] = []   # ✏️ Build 2, step 2.1: schemas for the tools you add
-LOCAL_TOOLS: Dict[str, Any] = {}         # ✏️ Build 2, step 2.1: the functions behind them
+_POLICY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "data", "americas", "disruption_policy.json")
+
+
+def cause_in_plain_words(cause_code: str, language: str = "en") -> Dict[str, Any]:
+    """Translate a disruption cause_code into the customer-facing wording the
+    policy table defines (cause_labels_customer). Read straight from the policy
+    file so the wording stays tied to check_policy's source of truth."""
+    with open(_POLICY_PATH, encoding="utf-8") as fh:
+        policy = json.load(fh)
+    code = str(cause_code).strip().upper()
+    labels = policy["cause_labels_customer"]
+    if code not in labels:
+        return {"error": "Unknown cause_code %r. Valid codes: %s"
+                         % (cause_code, ", ".join(sorted(labels)))}
+    lang = language if language in labels[code] else "en"
+    return {
+        "cause_code": code,
+        "plain_words": labels[code][lang],
+        "language": lang,
+        "cause_class": policy["cause_classes"][code],
+    }
+
+
+EXTRA_TOOLS: List[Dict[str, Any]] = [    # ✏️ Build 2, step 2.1: schemas for the tools you add
+    {
+        "name": "cause_in_plain_words",
+        "description": (
+            "Turn a disruption cause_code from get_flight_status (WX, ATC, MX, CREW, SEC) "
+            "into the plain wording Larkspur uses with customers, for example 'weather'. "
+            "Call it whenever you are about to tell the customer why their flight is "
+            "disrupted, instead of naming the cause yourself. Returns plain_words and "
+            "whether the cause is controllable or uncontrollable. Name the cause only "
+            "with plain_words; do not elaborate on it or assign blame."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "cause_code": {
+                    "type": "string",
+                    "enum": ["WX", "ATC", "MX", "CREW", "SEC"],
+                    "description": "The cause_code get_flight_status returned. Never guessed from customer text.",
+                },
+                "language": {
+                    "type": "string",
+                    "enum": ["en", "es"],
+                    "description": "Customer's language from the booking. Defaults to en.",
+                },
+            },
+            "required": ["cause_code"],
+        },
+    },
+]
+LOCAL_TOOLS: Dict[str, Any] = {          # ✏️ Build 2, step 2.1: the functions behind them
+    "cause_in_plain_words": cause_in_plain_words,
+}
 
 
 def text_of(response) -> str:
@@ -65,7 +121,6 @@ def run_agent(pnr: str, last_name: str, message: str) -> str:            # ✏�
         thinking={"type": "adaptive"}, tools=tools, messages=messages,
     )
 
-    answer = ""
     turns = 1
     while response.stop_reason == "tool_use" and turns < MAX_TOOL_CALLS:
         messages.append({"role": "assistant", "content": response.content})
@@ -164,7 +219,9 @@ def build_tools() -> List[Dict[str, Any]]:                 # ✏️ Build 1, ste
         },
         {
             "name": "hold_seat",
-            "description": "Place a 15-minute hold on one alternative. Reversible. It simply expires.",
+            "description": "Place a 15-minute hold on one alternative the customer has chosen, using the "
+                            "option_id from search_alternatives. Reversible: the hold expires on its own. "
+                            "Call it before confirm_rebooking.",
             "input_schema": {
                 "type": "object",
                 "properties": {"option_id": {"type": "string"}, "pnr": {"type": "string"}},
