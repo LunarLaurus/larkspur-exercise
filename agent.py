@@ -130,7 +130,9 @@ def run_agent(pnr: str, last_name: str, message: str) -> str:            # ✏�
             thinking={"type": "adaptive"}, tools=tools, messages=messages,
         )
         turns += 1
-    return text_of(response)
+        answer = text_of(response)
+
+    return answer
 
 
 def tool_list() -> List[Dict[str, Any]]:                   # ✏️ Build 2, step 2.2
@@ -172,16 +174,19 @@ def build_tools() -> List[Dict[str, Any]]:                 # ✏️ Build 1, ste
                 "type": "object",
                 "properties": {
                     "flight_no": {"type": "string"},
-                    "date": {"type": "string", "description": "YYYY-MM-DD"},
+                    "date": {"type": "string", "description": "Local travel date in ISO format, YYYY-MM-DD, e.g. 2025-05-08"},
                 },
                 "required": ["flight_no", "date"],
             },
         },
         {
             "name": "search_alternatives",
-            "description": "Find alternative flights for a disrupted booking, identified by its pnr. "
-                            "Call it once get_flight_status confirms the disruption, before hold_seat. "
-                            "Use the pnr from lookup_booking.",
+            "description": (
+                "Find alternative flights for the disrupted segment of this booking, ranked, "
+                "each with an option_id that hold_seat can take. Call it when the customer's "
+                "flight is cancelled or delayed and they need a way to travel instead. Pass the "
+                "booking's PNR. It only lists options; it holds and books nothing."
+            ),
             "input_schema": {
                 "type": "object",
                 "properties": {"pnr": {"type": "string"}},
