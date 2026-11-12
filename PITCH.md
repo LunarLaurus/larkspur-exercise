@@ -4,7 +4,7 @@ Six lines and a lever. Your words. The last two are scored.
 
 Built: A support agent for disrupted flights, with Larkspur's nine tools (plus ours).
 Does: It finds the booking, looks for flights with free seats, holds one, and explains the fare rules in plain words.
-Number: Counts tokens in and out for the customer query
+Number: About 17,560 tokens in and 980 tokens out per customer contact, averaged over the 5 ticket types, 1 run each (run.py --all --trace)
 Safety check: It holds a seat but never books it, only the customer's own click does.
 Next: Let the agent answer customers in different languages
 Still broken: Havent investigated scaling, no idea if it could handle a million stranded customers at the same time
