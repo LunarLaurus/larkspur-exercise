@@ -8,7 +8,7 @@ Number: About 17,560 tokens in and 980 tokens out per customer contact, averaged
 Safety check: It holds a seat but never books it, only the customer's own click does.
 Next: Let the agent answer customers in different languages
 Still broken: Havent investigated scaling, no idea if it could handle a million stranded customers at the same time
-Lever: <cost | speed | intelligence>
+Lever: intelligence
 
 ## Priya asked
 

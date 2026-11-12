@@ -15,9 +15,20 @@ from support import (MODEL, SYSTEM_PROMPT, call_local, execute_tool, mcp_client,
                      new_session, next_available_day, record_tool_result,
                      runtime_preamble)
 
-MAX_TOOL_CALLS = 8  # Larkspur's own build capped the loop here; then a human takes over.
+MODEL = "claude-haiku-5-5"  # overrides support.MODEL (sonnet) for this agent only
 
-TONE_ADDENDUM = ""                       # ✏️ Build 4, step 4.1, intelligence goal
+MAX_TOOL_CALLS = 8 # Larkspur's own build capped the loop here; then a human takes over.
+
+TONE_ADDENDUM = (
+    "Tone and escalation. Read the customer's message for how they are, not only what they ask. "
+    "Frustration and blunt complaints are normal after a disruption: acknowledge them in one plain "
+    "sentence, then help as usual. A message that threatens legal action, the media or a regulator, or "
+    "that is abusive toward staff, is different: acknowledge it once, calmly, without arguing, "
+    "apologising for the threat, or repeating the abuse; then call escalate_to_human with the threat "
+    "quoted in summary_for_human. In that reply, do not give an entitlements rundown, do not issue "
+    "any voucher, do not mention refunds or compensation, and promise nothing about the outcome. "
+    "Tell the customer a person from Larkspur will pick this up, and stop there."
+)
 def seats_left(pnr: str, last_name: str, flight_no: str, date: str) -> Dict[str, Any]:
     """Yes only if the flight has seats for the WHOLE booking party."""
     try:
