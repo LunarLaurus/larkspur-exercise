@@ -38,6 +38,33 @@ EXTRA_TOOLS: List[Dict[str, Any]] = [   # ✏️ Build 2, step 2.1: schemas for 
             "required": ["section"],
         },
     },
+    {
+        "name": "next_available_day",
+        "description": (
+            "Find the first day the customer can fly on their route: the earliest date with "
+            "at least one open seat on a Larkspur flight from origin to dest in the given cabin. "
+            "Cancelled, diverted and already-departed flights never count. Call it after "
+            "get_flight_status shows the customer's flight is CANCELLED, or when the customer "
+            "asks when they can next fly, before you tell them any date; never state one from "
+            "memory. Pass origin, dest and the cancelled flight's date from lookup_booking's "
+            "disrupted segment, not from the customer's wording. It returns a date as "
+            "YYYY-MM-DD, or None if no flight on the route has a seat. If it returns None, or a "
+            "date earlier than the one you passed, do not offer a date; use search_alternatives "
+            "or escalate_to_human instead. It checks one seat only and holds nothing: for a "
+            "party of more than one, say the date is not confirmed for everyone, and use "
+            "search_alternatives and hold_seat to choose and hold a specific flight."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "origin": {"type": "string", "description": "Departure airport of the disrupted segment, 3-letter uppercase IATA code, e.g. 'DEN'."},
+                "dest": {"type": "string", "description": "Arrival airport of the disrupted segment, 3-letter uppercase IATA code, e.g. 'AUS'."},
+                "date": {"type": "string", "description": "The cancelled flight's local date, ISO YYYY-MM-DD, e.g. 2025-05-08."},
+                "cabin": {"type": "string", "enum": ["Y", "J"], "description": "Cabin booked on the disrupted segment: Y economy, J business. Defaults to Y."},
+            },
+            "required": ["origin", "dest", "date"],
+        },
+    },
 ]
 FARE_RULES_FILE = Path(__file__).parent / "data" / "americas" / "fare_rules_excerpt.md"
 
@@ -64,7 +91,7 @@ def fare_rules(section: str) -> Dict[str, Any]:
         section, ", ".join("%s (%s)" % (s["number"], s["title"]) for s in sections))}
 
 
-LOCAL_TOOLS: Dict[str, Any] = {"fare_rules": fare_rules}   # ✏️ Build 2, step 2.1: the functions behind them
+LOCAL_TOOLS: Dict[str, Any] = {"fare_rules": fare_rules, "next_available_day": next_available_day}   # ✏️ Build 2, step 2.1: the functions behind them
 
 
 def text_of(response) -> str:
