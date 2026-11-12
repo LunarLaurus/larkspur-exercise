@@ -10,6 +10,7 @@ Steps and gates:  https://anthropicpartnerbasecamp.bts.com/
 """
 from __future__ import annotations
 from typing import Any, Dict, List
+from support import mock_backend as backend
 from support import (MODEL, SYSTEM_PROMPT, call_local, execute_tool, mcp_client,
                      new_session, next_available_day, record_tool_result,
                      runtime_preamble)
@@ -17,8 +18,48 @@ from support import (MODEL, SYSTEM_PROMPT, call_local, execute_tool, mcp_client,
 MAX_TOOL_CALLS = 8  # Larkspur's own build capped the loop here; then a human takes over.
 
 TONE_ADDENDUM = ""                       # ✏️ Build 4, step 4.1, intelligence goal
-EXTRA_TOOLS: List[Dict[str, Any]] = []   # ✏️ Build 2, step 2.1: schemas for the tools you add
-LOCAL_TOOLS: Dict[str, Any] = {}         # ✏️ Build 2, step 2.1: the functions behind them
+def seats_left(pnr: str, last_name: str, flight_no: str, date: str) -> Dict[str, Any]:
+    """Yes only if the flight has seats for the WHOLE booking party."""
+    try:
+        booking = backend.get_booking_raw(pnr)
+    except backend.NotFound as exc:
+        return {"error": str(exc)}
+    if not any(p["last_name"].lower() == last_name.strip().lower() for p in booking["passengers"]):
+        return {"error": "Name does not match this PNR."}
+    party = len(booking["passengers"])
+    cabin = backend.get_disrupted_segment(booking)["cabin"]
+    flight = backend.get_flight_status_raw(flight_no, date)
+    if "error" in flight:
+        return {"error": flight["error"]}
+    if "seats_left_Y" not in flight:
+        return {"error": f"No seat data for {flight_no} on {date}."}
+    available = flight["seats_left_J" if cabin == "J" else "seats_left_Y"]
+    return {"enough_seats": "yes" if available >= party else "no", "party_size": party}
+
+
+EXTRA_TOOLS: List[Dict[str, Any]] = [    # ✏️ Build 2, step 2.1: schemas for the tools you add
+    {
+        "name": "seats_left",
+        "description": (
+            "Use when a customer names a specific flight and asks whether it can fit their "
+            "booking party. Do not use it on options returned by search_alternatives: "
+            "those already fit the whole party. Identify the party by PNR and the lead "
+            "passenger's last name. Answers yes only if there are seats for the whole "
+            "party, who must travel together; no if only some of them would fit."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "pnr": {"type": "string"},
+                "last_name": {"type": "string", "description": "Lead passenger's last name"},
+                "flight_no": {"type": "string"},
+                "date": {"type": "string", "description": "YYYY-MM-DD"},
+            },
+            "required": ["pnr", "last_name", "flight_no", "date"],
+        },
+    },
+]
+LOCAL_TOOLS: Dict[str, Any] = {"seats_left": seats_left}  # ✏️ Build 2, step 2.1: the functions behind them
 
 
 def text_of(response) -> str:
@@ -83,7 +124,7 @@ def run_agent(pnr: str, last_name: str, message: str) -> str:            # ✏�
 def tool_list() -> List[Dict[str, Any]]:                   # ✏️ Build 2, step 2.2
     """Given. Exactly what Claude is offered on every turn; run.py --show-tools
     prints this list."""
-    return build_tools() + EXTRA_TOOLS
+    return build_tools() + EXTRA_TOOLS + mcp_client.tools()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -164,7 +205,12 @@ def build_tools() -> List[Dict[str, Any]]:                 # ✏️ Build 1, ste
         },
         {
             "name": "hold_seat",
-            "description": "Place a 15-minute hold on one alternative. Reversible. It simply expires.",
+            "description": (
+                "Place a 15-minute hold on one alternative, after the customer has chosen it. "
+                "Reversible. It simply expires. After holding, ask the customer to confirm "
+                "whether they want to change their booking, and tell them to click Confirm "
+                "themselves. Do not finalize it for them."
+            ),
             "input_schema": {
                 "type": "object",
                 "properties": {"option_id": {"type": "string"}, "pnr": {"type": "string"}},
