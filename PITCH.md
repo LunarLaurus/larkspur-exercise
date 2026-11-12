@@ -12,7 +12,7 @@ Lever: <cost | speed | intelligence>
 
 ## Priya asked
 
-Costs:
-Wrong:
-Runs it:
-Left out:
+Costs: About $0.06 per conversation (model cost only), on claude-sonnet-5-5
+Wrong: The agent is built such that the information it provides is always guaranteed to come from your source data, there will be no data fabrication or hallucination.
+Runs it: We will provide tools to enable you to monitor it and carry out first and 2nd line support, we will provide 3rd line support to fix any issues and add extra features.
+Left out: Havent investigated scaling, no idea if it could handle a million stranded customers at the same time
